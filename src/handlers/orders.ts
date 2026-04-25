@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { dbGet, dbPut, dbQuery, dbBatchWrite } from "../utils/dynamodb";
 import { successResponse, errorResponse, parseBody } from "../utils/response";
-import { Order, OrderItem } from "../types";
+import { Order } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 // Create new order

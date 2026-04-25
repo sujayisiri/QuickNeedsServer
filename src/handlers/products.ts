@@ -1,11 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { dbGet, dbPut, dbDelete, dbQuery } from "../utils/dynamodb";
-import {
-  successResponse,
-  errorResponse,
-  parseBody,
-  generateId,
-} from "../utils/response";
+import { successResponse, errorResponse, parseBody } from "../utils/response";
 import { Product } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
