@@ -112,6 +112,24 @@ cd /Users/sujays/Desktop/Personal/QuickNeedsServer
 zip -r deployment-packages/functions.zip dist/ node_modules/ package.json
 ```
 
+**Note:** If your package exceeds 50MB, you need to upload via S3 (see Step 4a below).
+
+---
+
+## Step 4a: Upload to S3 (Required if package > 50MB)
+
+Since the package is ~64MB, direct upload won't work. Use S3 instead:
+
+```bash
+# Create an S3 bucket (one-time setup)
+aws s3 mb s3://quickneeds-lambda-deployments --region us-east-1
+
+# Upload the zip file
+aws s3 cp deployment-packages/functions.zip s3://quickneeds-lambda-deployments/functions.zip
+```
+
+**Important:** Keep this bucket for future updates. You'll upload new versions here.
+
 ---
 
 ## Step 5: Create Lambda Functions
@@ -128,9 +146,17 @@ You need to create **13 Lambda functions**. For each function:
    - **Architecture**: x86_64
    - **Permissions**: Use existing role → `quickneeds-lambda-role`
 4. Click **Create function**
-5. Upload code:
+5. Upload code (choose ONE method):
+
+   **Method A - Via S3 (Required if > 50MB):**
+   - **Code source** → **Upload from** → **Amazon S3 location**
+   - Enter S3 URI: `s3://quickneeds-lambda-deployments/functions.zip`
+   - Click **Save**
+
+   **Method B - Direct upload (Only if < 50MB):**
    - **Code source** → **Upload from** → **.zip file**
    - Upload `deployment-packages/functions.zip`
+
 6. Configure:
    - **Handler**: (see list below)
    - **Memory**: 512 MB
@@ -297,14 +323,23 @@ npm run build
 # Repackage
 zip -r deployment-packages/functions.zip dist/ node_modules/ package.json
 
-# Upload to each Lambda function via console
-# Or use AWS CLI:
+# Upload to S3
+aws s3 cp deployment-packages/functions.zip s3://quickneeds-lambda-deployments/functions.zip
+
+# Update all Lambda functions via AWS CLI:
 aws lambda update-function-code \
   --function-name quickneeds-sendOtp \
-  --zip-file fileb://deployment-packages/functions.zip
-```
+  --s3-bucket quickneeds-lambda-deployments \
+  --s3-key functions.zip
 
-Repeat for all 13 functions.
+# Repeat for all 13 functions, or use this loop:
+for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct createProduct updateProduct deleteProduct createOrder listOrders getOrder updateOrderStatus authorizer; do
+  aws lambda update-function-code \
+    --function-name quickneeds-$func \
+    --s3-bucket quickneeds-lambda-deployments \
+    --s3-key functions.zip
+done
+```
 
 ---
 
