@@ -1,4 +1,4 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, ReturnValue } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -12,17 +12,17 @@ import {
 
 // Configure DynamoDB client (supports local and AWS)
 const clientConfig: any = {
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || "us-east-1",
 };
 
 // Use local DynamoDB if IS_OFFLINE is set (serverless-offline)
-if (process.env.IS_OFFLINE === 'true') {
-  clientConfig.endpoint = 'http://localhost:8000';
+if (process.env.IS_OFFLINE === "true") {
+  clientConfig.endpoint = "http://localhost:8000";
   clientConfig.credentials = {
-    accessKeyId: 'local',
-    secretAccessKey: 'local',
+    accessKeyId: "local",
+    secretAccessKey: "local",
   };
-  console.log('🔧 Using local DynamoDB at http://localhost:8000');
+  console.log("🔧 Using local DynamoDB at http://localhost:8000");
 }
 
 const client = new DynamoDBClient(clientConfig);
@@ -74,7 +74,7 @@ export const dbUpdate = async (params: {
   UpdateExpression: string;
   ExpressionAttributeValues: any;
   ExpressionAttributeNames?: any;
-  ReturnValues?: string;
+  ReturnValues?: ReturnValue;
 }) => {
   const command = new UpdateCommand({
     TableName,
