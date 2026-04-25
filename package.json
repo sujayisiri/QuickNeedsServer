@@ -1,0 +1,53 @@
+{
+  "name": "quickneeds-server",
+  "version": "1.0.0",
+  "description": "QuickNeeds Backend API for AWS Lambda",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npm run build && serverless deploy",
+    "deploy:dev": "npm run build && serverless deploy --stage dev",
+    "deploy:prod": "npm run build && serverless deploy --stage prod",
+    "local": "serverless offline start --httpPort 3000",
+    "test": "jest",
+    "test:local": "npm run build && node scripts/test-local.js",
+    "lint": "eslint . --ext .ts",
+    "seed:products": "ts-node scripts/seed-products.ts",
+    "create:admin": "ts-node scripts/create-admin.ts",
+    "db:local:create": "node scripts/create-local-table.js",
+    "db:local:start": "docker run -p 8000:8000 amazon/dynamodb-local"
+  },
+  "keywords": [
+    "quickneeds",
+    "serverless",
+    "lambda",
+    "dynamodb"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.540.0",
+    "@aws-sdk/lib-dynamodb": "^3.540.0",
+    "@aws-sdk/client-sns": "^3.540.0",
+    "aws-lambda": "^1.0.7",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.136",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.30",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^7.3.1",
+    "@typescript-eslint/parser": "^7.3.1",
+    "eslint": "^8.57.0",
+    "serverless": "^3.38.0",
+    "serverless-offline": "^13.3.3",
+    "serverless-plugin-typescript": "^2.1.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3"
+  }
+}
