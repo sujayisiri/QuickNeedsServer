@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { dbGet, dbPut, dbQuery, dbBatchWrite } from "../utils/dynamodb";
+import { dbGet, dbPut, dbQuery, dbBatchWrite, dbScan } from "../utils/dynamodb";
 import { successResponse, errorResponse, parseBody } from "../utils/response";
 import { Order } from "../types";
 import { v4 as uuidv4 } from "uuid";
@@ -143,14 +143,13 @@ export const listOrders = async (
           Limit: limit,
         });
       } else {
-        // Get all orders
-        result = await dbQuery({
-          KeyConditionExpression: "begins_with(PK, :prefix) AND SK = :sk",
+        // Get all orders using Scan
+        result = await dbScan({
+          FilterExpression: "begins_with(PK, :prefix) AND SK = :sk",
           ExpressionAttributeValues: {
             ":prefix": "ORDER#",
             ":sk": "METADATA",
           },
-          ScanIndexForward: false,
           Limit: limit,
         });
       }

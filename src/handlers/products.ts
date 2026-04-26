@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { dbGet, dbPut, dbDelete, dbQuery } from "../utils/dynamodb";
+import { dbGet, dbPut, dbDelete, dbQuery, dbScan } from "../utils/dynamodb";
 import { successResponse, errorResponse, parseBody } from "../utils/response";
 import { Product } from "../types";
 import { v4 as uuidv4 } from "uuid";
@@ -25,9 +25,9 @@ export const listProducts = async (
         Limit: limit,
       });
     } else {
-      // Query all products
-      result = await dbQuery({
-        KeyConditionExpression: "begins_with(PK, :prefix) AND SK = :sk",
+      // Scan all products (no category filter)
+      result = await dbScan({
+        FilterExpression: "begins_with(PK, :prefix) AND SK = :sk",
         ExpressionAttributeValues: {
           ":prefix": "PRODUCT#",
           ":sk": "METADATA",
