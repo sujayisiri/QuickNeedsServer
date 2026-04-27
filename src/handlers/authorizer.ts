@@ -15,10 +15,17 @@ export const handler = async (
       throw new Error("Unauthorized");
     }
 
-    return generatePolicy(decoded.phoneNumber, "Allow", event.methodArn, {
-      phoneNumber: decoded.phoneNumber,
-      role: decoded.role,
-    });
+    const policy = generatePolicy(
+      decoded.phoneNumber,
+      "Allow",
+      event.methodArn,
+      {
+        phoneNumber: decoded.phoneNumber,
+        role: decoded.role,
+      },
+    );
+
+    return policy;
   } catch (error) {
     console.error("Authorizer Error:", error);
     throw new Error("Unauthorized");
@@ -31,6 +38,20 @@ const generatePolicy = (
   resource: string,
   context?: Record<string, any>,
 ): APIGatewayAuthorizerResult => {
+  // API Gateway requires context values to be strings, numbers, or booleans
+  const stringifiedContext: Record<string, string> = {};
+  if (context) {
+    for (const key in context) {
+      stringifiedContext[key] = String(context[key]);
+    }
+  }
+
+  // Use wildcard to allow all methods in the API
+  // Extract API Gateway ARN base and append wildcard
+  // Example: arn:aws:execute-api:region:account:api-id/stage/METHOD/path -> arn:aws:execute-api:region:account:api-id/*/*
+  const resourceParts = resource.split("/");
+  const apiGatewayArn = resourceParts.slice(0, 2).join("/") + "/*";
+
   return {
     principalId,
     policyDocument: {
@@ -39,10 +60,10 @@ const generatePolicy = (
         {
           Action: "execute-api:Invoke",
           Effect: effect,
-          Resource: resource,
+          Resource: apiGatewayArn,
         },
       ],
     },
-    context: context || {},
+    context: stringifiedContext,
   };
 };
