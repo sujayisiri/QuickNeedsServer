@@ -8,14 +8,28 @@ export const getProfile = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    const phoneNumber = event.requestContext.authorizer?.phoneNumber;
+    const authenticatedPhone = event.requestContext.authorizer?.phoneNumber;
+    const role = event.requestContext.authorizer?.role;
 
-    if (!phoneNumber) {
+    if (!authenticatedPhone) {
       return errorResponse("Unauthorized", 401);
     }
 
+    // Allow admin to fetch any user's profile via query parameter
+    const requestedPhone = event.queryStringParameters?.phoneNumber;
+    
+    let phoneNumberToFetch = authenticatedPhone;
+    
+    // If admin is requesting another user's profile
+    if (requestedPhone && requestedPhone !== authenticatedPhone) {
+      if (role !== "admin") {
+        return errorResponse("Forbidden: Admin access required", 403);
+      }
+      phoneNumberToFetch = requestedPhone;
+    }
+
     const user = (await dbGet({
-      PK: `USER#${phoneNumber}`,
+      PK: `USER#${phoneNumberToFetch}`,
       SK: "PROFILE",
     })) as (User & { PK: string; SK: string }) | undefined;
 
