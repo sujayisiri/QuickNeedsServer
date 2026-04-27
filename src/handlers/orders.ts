@@ -198,14 +198,6 @@ export const getOrder = async (
     const role = event.requestContext.authorizer?.role;
     const orderId = event.pathParameters?.id;
 
-    console.log("Get Order - Auth Context:", {
-      phoneNumber,
-      role,
-      roleType: typeof role,
-      orderId,
-      fullAuthorizer: event.requestContext.authorizer,
-    });
-
     if (!phoneNumber || !orderId) {
       return errorResponse("Unauthorized or missing order ID", 401);
     }
@@ -220,16 +212,8 @@ export const getOrder = async (
       return errorResponse("Order not found", 404);
     }
 
-    console.log("Authorization check:", {
-      role,
-      orderOwner: order.orderedBy,
-      requestingUser: phoneNumber,
-      isAdmin: role === "admin",
-    });
-
     // Check authorization (user can only see their orders)
     if (role !== "admin" && order.orderedBy !== phoneNumber) {
-      console.log("Access denied - not admin and not order owner");
       return errorResponse("Forbidden", 403);
     }
 
