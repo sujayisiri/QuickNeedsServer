@@ -102,18 +102,21 @@ curl http://localhost:3000/dev/products
 ## Troubleshooting
 
 **Port already in use:**
+
 ```bash
 # Use different port
 serverless offline start --httpPort 3001
 ```
 
 **DynamoDB connection error:**
+
 ```bash
 # Make sure DynamoDB Local is running on port 8000
 docker ps  # Check if container is running
 ```
 
 **Cannot find module errors:**
+
 ```bash
 # Rebuild
 npm run build

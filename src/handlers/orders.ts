@@ -3,6 +3,7 @@ import { dbGet, dbPut, dbQuery, dbBatchWrite, dbScan } from "../utils/dynamodb";
 import { successResponse, errorResponse, parseBody } from "../utils/response";
 import { Order } from "../types";
 import { v4 as uuidv4 } from "uuid";
+import { notifyAdmins, notifyUser } from "./notifications";
 
 // Create new order
 export const createOrder = async (
@@ -91,6 +92,22 @@ export const createOrder = async (
 
     if (batchItems.length > 0) {
       await dbBatchWrite(batchItems);
+    }
+
+    // Send push notification to admins about new order
+    try {
+      await notifyAdmins(
+        "New Order Received",
+        `Order #${orderId.substring(0, 8)} - ₹${total} (${body.items.length} items)`,
+        {
+          orderId,
+          type: "new_order",
+          total: total.toString(),
+        },
+      );
+    } catch (notifError) {
+      console.error("Error sending notification to admins:", notifError);
+      // Don't fail the order creation if notification fails
     }
 
     return successResponse(
@@ -324,6 +341,47 @@ export const updateOrderStatus = async (
     }
 
     await dbPut(updatedOrder);
+
+    // Send push notification to user about status change
+    try {
+      if (body.status === "accepted") {
+        await notifyUser(
+          order.orderedBy,
+          "Order Accepted",
+          `Your order #${orderId.substring(0, 8)} has been accepted and is being prepared`,
+          {
+            orderId,
+            type: "order_accepted",
+            status: body.status,
+          },
+        );
+      } else if (body.status === "delivered") {
+        await notifyUser(
+          order.orderedBy,
+          "Order Delivered",
+          `Your order #${orderId.substring(0, 8)} has been delivered. Thank you for shopping with us!`,
+          {
+            orderId,
+            type: "order_delivered",
+            status: body.status,
+          },
+        );
+      } else if (body.status === "cancelled") {
+        await notifyUser(
+          order.orderedBy,
+          "Order Cancelled",
+          `Your order #${orderId.substring(0, 8)} has been cancelled`,
+          {
+            orderId,
+            type: "order_cancelled",
+            status: body.status,
+          },
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification to user:", notifError);
+      // Don't fail the status update if notification fails
+    }
 
     return successResponse({
       message: "Order status updated successfully",

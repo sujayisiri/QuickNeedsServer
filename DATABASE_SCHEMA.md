@@ -191,7 +191,30 @@ Attributes:
 
 ---
 
-### 6. Sessions (Optional)
+### 6. Device Tokens
+
+**Purpose**: Store device tokens for push notifications
+
+```
+PK: USER#{phoneNumber}
+SK: DEVICE_TOKEN#{fcmToken}
+Attributes:
+  - phoneNumber: string
+  - fcmToken: string
+  - deviceType: "ios" | "android" | "unknown"
+  - createdAt: ISO timestamp
+  - updatedAt: ISO timestamp
+```
+
+**Access Patterns**:
+
+- Get all device tokens for a user: `PK = USER#{phoneNumber} AND SK begins_with DEVICE_TOKEN#`
+- Register new token: `PutItem` with `PK` and `SK`
+- Remove token: `DeleteItem` by `PK` and `SK`
+
+---
+
+### 7. Sessions (Optional)
 
 **Purpose**: Store user session tokens
 

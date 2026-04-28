@@ -14,6 +14,7 @@ provider:
     DYNAMODB_TABLE: ${self:custom.tableName}
     JWT_SECRET: ${env:JWT_SECRET, 'your-secret-key-change-in-production'}
     SNS_REGION: ${self:provider.region}
+    FIREBASE_SERVICE_ACCOUNT_KEY: ${env:FIREBASE_SERVICE_ACCOUNT_KEY, ''}
   iam:
     role:
       statements:
@@ -175,6 +176,29 @@ functions:
       - http:
           path: /orders/{id}/status
           method: put
+          cors: true
+          authorizer:
+            name: authorizerFunc
+            resultTtlInSeconds: 300
+
+  # Notification Functions
+  registerToken:
+    handler: src/handlers/notifications.registerToken
+    events:
+      - http:
+          path: /notifications/register-token
+          method: post
+          cors: true
+          authorizer:
+            name: authorizerFunc
+            resultTtlInSeconds: 300
+
+  sendNotification:
+    handler: src/handlers/notifications.sendNotification
+    events:
+      - http:
+          path: /notifications/send
+          method: post
           cors: true
           authorizer:
             name: authorizerFunc

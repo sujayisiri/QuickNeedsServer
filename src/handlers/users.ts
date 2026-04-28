@@ -17,9 +17,9 @@ export const getProfile = async (
 
     // Allow admin to fetch any user's profile via query parameter
     const requestedPhone = event.queryStringParameters?.phoneNumber;
-    
+
     let phoneNumberToFetch = authenticatedPhone;
-    
+
     // If admin is requesting another user's profile
     if (requestedPhone && requestedPhone !== authenticatedPhone) {
       if (role !== "admin") {

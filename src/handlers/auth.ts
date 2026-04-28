@@ -68,6 +68,7 @@ export const verifyOtp = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
+    console.log("Verify OTP started");
     const body = parseBody<{ phoneNumber: string; otp: string }>(event.body);
 
     if (!body || !body.phoneNumber || !body.otp) {
@@ -75,17 +76,21 @@ export const verifyOtp = async (
     }
 
     const { phoneNumber, otp } = body;
+    console.log(`Verifying OTP for phone: ${phoneNumber}`);
 
     // Get OTP record
+    console.log("Fetching OTP record from DynamoDB");
     const otpRecord = (await dbGet({
       PK: `OTP#${phoneNumber}`,
       SK: "VERIFICATION",
     })) as (OTPRecord & { PK: string; SK: string }) | undefined;
 
     if (!otpRecord) {
+      console.log("OTP record not found");
       return errorResponse("OTP not found or expired", 400);
     }
 
+    console.log("OTP record found, checking expiry");
     // Check if OTP is expired
     if (otpRecord.expiresAt < Date.now()) {
       return errorResponse("OTP has expired", 400);
@@ -99,10 +104,12 @@ export const verifyOtp = async (
       );
     }
 
+    console.log("Comparing OTP");
     // Verify OTP
     const isValid = compareOTP(otp, otpRecord.otp);
 
     if (!isValid) {
+      console.log("Invalid OTP, incrementing attempts");
       // Increment attempts
       await dbPut({
         ...otpRecord,
@@ -111,12 +118,14 @@ export const verifyOtp = async (
       return errorResponse("Invalid OTP", 400);
     }
 
+    console.log("OTP valid, marking as verified");
     // Mark OTP as verified
     await dbPut({
       ...otpRecord,
       verified: true,
     });
 
+    console.log("Fetching user profile");
     // Check if user exists
     let user = (await dbGet({
       PK: `USER#${phoneNumber}`,
@@ -125,6 +134,7 @@ export const verifyOtp = async (
 
     // Create user if doesn't exist
     if (!user) {
+      console.log("Creating new user");
       user = {
         PK: `USER#${phoneNumber}`,
         SK: "PROFILE",
@@ -135,17 +145,20 @@ export const verifyOtp = async (
       };
       await dbPut(user);
     } else {
+      console.log("Updating existing user");
       // Update last login
       user.lastLogin = new Date().toISOString();
       await dbPut(user);
     }
 
+    console.log("Generating JWT token");
     // Generate JWT token
     const token = generateToken({
       phoneNumber: user.phoneNumber,
       role: user.role,
     });
 
+    console.log("Verify OTP successful");
     return successResponse({
       message: "Login successful",
       token,

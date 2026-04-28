@@ -99,40 +99,76 @@ npm run build
 
 ---
 
-## Step 4: Package Lambda Functions
+## Step 4: Create Lambda Layer for Dependencies
 
-For each function, create a deployment package:
+Lambda Layers separate node_modules from your code, providing several benefits:
+
+- **Smaller deployments**: Code package ~1MB vs 64MB
+- **Faster uploads**: Only update code when handlers change
+- **Share dependencies**: One layer used by all 13 functions
+- **No size limits**: Direct console upload works
 
 ```bash
-# Create deployment packages directory
-mkdir -p deployment-packages
-
-# Package all dependencies with built code
 cd /Users/sujays/Desktop/Personal/QuickNeedsServer
-zip -r deployment-packages/functions.zip dist/ node_modules/ package.json
+
+# Create layer structure
+mkdir -p layers/nodejs
+cp package.json package-lock.json layers/nodejs/
+cd layers/nodejs
+npm install --production
+
+# Package the layer
+cd ..
+zip -r ../deployment-packages/dependencies-layer.zip nodejs/
+
+# Go back to project root
+cd ../..
 ```
 
-**Note:** If your package exceeds 50MB, you need to upload via S3 (see Step 4a below).
+### Upload Layer to AWS:
 
----
+**Via AWS Console:**
 
-## Step 4a: Upload to S3 (Required if package > 50MB)
+1. Go to **Lambda** → **Layers** → **Create layer**
+2. Configure:
+   - **Name**: `quickneeds-dependencies`
+   - **Upload**: `deployment-packages/dependencies-layer.zip` (or upload to S3 first if > 50MB)
+   - **Compatible runtimes**: Node.js 20.x
+3. Click **Create**
+4. **Note the Layer ARN** (e.g., `arn:aws:lambda:us-east-1:123456789:layer:quickneeds-dependencies:1`)
 
-Since the package is ~64MB, direct upload won't work. Use S3 instead:
+**Via AWS CLI (if layer > 50MB):**
 
 ```bash
-# Create an S3 bucket (one-time setup)
+# Upload to S3
 aws s3 mb s3://quickneeds-lambda-deployments --region us-east-1
+aws s3 cp deployment-packages/dependencies-layer.zip s3://quickneeds-lambda-deployments/
 
-# Upload the zip file
-aws s3 cp deployment-packages/functions.zip s3://quickneeds-lambda-deployments/functions.zip
+# Create layer from S3
+aws lambda publish-layer-version \
+  --layer-name quickneeds-dependencies \
+  --content S3Bucket=quickneeds-lambda-deployments,S3Key=dependencies-layer.zip \
+  --compatible-runtimes nodejs20.x \
+  --region us-east-1
 ```
-
-**Important:** Keep this bucket for future updates. You'll upload new versions here.
 
 ---
 
-## Step 5: Create Lambda Functions
+## Step 5: Package Lambda Function Code
+
+Now package just your code (much smaller without node_modules):
+
+```bash
+cd /Users/sujays/Desktop/Personal/QuickNeedsServer
+mkdir -p deployment-packages
+zip -r deployment-packages/functions.zip dist/
+```
+
+This should be < 1MB and can be uploaded directly!
+
+---
+
+## Step 6: Create Lambda Functions
 
 You need to create **13 Lambda functions**. For each function:
 
@@ -146,22 +182,22 @@ You need to create **13 Lambda functions**. For each function:
    - **Architecture**: x86_64
    - **Permissions**: Use existing role → `quickneeds-lambda-role`
 4. Click **Create function**
-5. Upload code (choose ONE method):
-
-   **Method A - Via S3 (Required if > 50MB):**
-   - **Code source** → **Upload from** → **Amazon S3 location**
-   - Enter S3 URI: `s3://quickneeds-lambda-deployments/functions.zip`
-   - Click **Save**
-
-   **Method B - Direct upload (Only if < 50MB):**
+5. Upload code:
    - **Code source** → **Upload from** → **.zip file**
    - Upload `deployment-packages/functions.zip`
 
-6. Configure:
+6. **Add the Layer:**
+   - Scroll down to **Layers** section
+   - Click **Add a layer**
+   - Select **Custom layers**
+   - Choose `quickneeds-dependencies` and version 1
+   - Click **Add**
+
+7. Configure:
    - **Handler**: (see list below)
    - **Memory**: 512 MB
    - **Timeout**: 30 seconds
-7. Add **Environment variables**:
+8. Add **Environment variables**:
    ```
    DYNAMODB_TABLE=quickneeds-dev
    JWT_SECRET=your-secure-random-secret-key-here
@@ -190,7 +226,7 @@ You need to create **13 Lambda functions**. For each function:
 
 ---
 
-## Step 6: Create API Gateway
+## Step 7: Create API Gateway
 
 ### Via AWS Console:
 
@@ -262,7 +298,7 @@ You need to create **13 Lambda functions**. For each function:
 
 ---
 
-## Step 7: Test the API
+## Step 8: Test the API
 
 ```bash
 # Set your API URL
@@ -279,7 +315,7 @@ curl $API_URL/products
 
 ---
 
-## Step 8: Create Admin User
+## Step 9: Create Admin User
 
 Run this from your local machine:
 
@@ -292,7 +328,7 @@ npm run create:admin 9999999999
 
 ---
 
-## Step 9: Seed Products (Optional)
+## Step 10: Seed Products (Optional)
 
 ```bash
 export AWS_REGION=us-east-1
@@ -314,30 +350,47 @@ npm run seed:products
 
 ## Updating Code
 
-To update after making changes:
+### Update Function Code (when you change handlers):
 
 ```bash
 # Rebuild
 npm run build
 
-# Repackage
-zip -r deployment-packages/functions.zip dist/ node_modules/ package.json
-
-# Upload to S3
-aws s3 cp deployment-packages/functions.zip s3://quickneeds-lambda-deployments/functions.zip
+# Repackage only code
+zip -r deployment-packages/functions.zip dist/
 
 # Update all Lambda functions via AWS CLI:
-aws lambda update-function-code \
-  --function-name quickneeds-sendOtp \
-  --s3-bucket quickneeds-lambda-deployments \
-  --s3-key functions.zip
-
-# Repeat for all 13 functions, or use this loop:
 for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct createProduct updateProduct deleteProduct createOrder listOrders getOrder updateOrderStatus authorizer; do
   aws lambda update-function-code \
     --function-name quickneeds-$func \
-    --s3-bucket quickneeds-lambda-deployments \
-    --s3-key functions.zip
+    --zip-file fileb://deployment-packages/functions.zip
+done
+```
+
+### Update Dependencies Layer (when package.json changes):
+
+```bash
+# Rebuild layer
+cd layers/nodejs
+npm install --production
+cd ..
+zip -r ../deployment-packages/dependencies-layer.zip nodejs/
+cd ..
+
+# Publish new layer version
+aws lambda publish-layer-version \
+  --layer-name quickneeds-dependencies \
+  --zip-file fileb://deployment-packages/dependencies-layer.zip \
+  --compatible-runtimes nodejs20.x
+
+# Note the new version number (e.g., 2)
+# Update all functions to use new layer version:
+LAYER_ARN="arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:layer:quickneeds-dependencies:2"
+
+for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct createProduct updateProduct deleteProduct createOrder listOrders getOrder updateOrderStatus authorizer; do
+  aws lambda update-function-configuration \
+    --function-name quickneeds-$func \
+    --layers $LAYER_ARN
 done
 ```
 
