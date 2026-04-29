@@ -88,13 +88,13 @@ export const getProduct = async (
       productId: product.productId,
       name: product.name,
       price: product.price,
+      category: product.category,
+      unit: product.unit,
+      image: product.image,
       imageUrl: product.imageUrl,
       description: product.description,
       descriptionType: product.descriptionType,
-      descriptionImageUrl: product.descriptionImageUrl
-      unit: product.unit,
-      image: product.image,
-      description: product.description,
+      descriptionImageUrl: product.descriptionImageUrl,
       barcode: product.barcode,
       stock: product.stock,
       active: product.active,
@@ -120,23 +120,34 @@ export const createProduct = async (
     const body = parseBody<{
       name: string;
       price: number;
-      imageUrl?: string;
-      description?: string;
-      descriptionType?: 'text' | 'image';
-      descriptionImageUrltring;
+      category: string;
       unit: string;
       image: string;
+      imageUrl?: string;
       description?: string;
+      descriptionType?: "text" | "image";
+      descriptionImageUrl?: string;
       barcode?: string;
       stock?: number;
-    }>(event.body);imageUrl, description, descriptionType, descriptionImageUrl
+    }>(event.body);
 
     if (!body) {
       return errorResponse("Invalid request body", 400);
     }
 
-    const { name, price, category, unit, image, description, barcode, stock } =
-      body;
+    const {
+      name,
+      price,
+      category,
+      unit,
+      image,
+      imageUrl,
+      description,
+      descriptionType,
+      descriptionImageUrl,
+      barcode,
+      stock,
+    } = body;
 
     if (!name || !price || !category || !unit || !image) {
       return errorResponse("Missing required fields", 400);
@@ -158,13 +169,13 @@ export const createProduct = async (
       productId,
       name,
       price,
-      imageUrl: imageUrl || undefined,
-      description: description || "",
-      descriptionType: descriptionType || 'text',
-      descriptionImageUrl: descriptionImageUrl || undefined
+      category,
       unit,
       image,
+      imageUrl: imageUrl || undefined,
       description: description || "",
+      descriptionType: descriptionType || "text",
+      descriptionImageUrl: descriptionImageUrl || undefined,
       barcode: barcode || "",
       stock: stock || 0,
       active: true,
@@ -179,16 +190,16 @@ export const createProduct = async (
       {
         message: "Product created successfully",
         product: {
-          imageUrl: product.imageUrl,
-          description: product.description,
-          descriptionType: product.descriptionType,
-          descriptionImageUrl: product.descriptionImageUrl
+          productId: product.productId,
           name: product.name,
           price: product.price,
           category: product.category,
           unit: product.unit,
           image: product.image,
+          imageUrl: product.imageUrl,
           description: product.description,
+          descriptionType: product.descriptionType,
+          descriptionImageUrl: product.descriptionImageUrl,
           barcode: product.barcode,
           stock: product.stock,
           active: product.active,
@@ -219,16 +230,16 @@ export const updateProduct = async (
       return errorResponse("Product ID is required", 400);
     }
 
-    coimageUrl?: string;
-      description?: string;
-      descriptionType?: 'text' | 'image';
-      descriptionImageUrlparseBody<{
+    const body = parseBody<{
       name?: string;
       price?: number;
       category?: string;
       unit?: string;
       image?: string;
+      imageUrl?: string;
       description?: string;
+      descriptionType?: "text" | "image";
+      descriptionImageUrl?: string;
       barcode?: string;
       stock?: number;
       active?: boolean;
@@ -248,11 +259,8 @@ export const updateProduct = async (
     if (!product) {
       return errorResponse("Product not found", 404);
     }
-imageUrl: body.imageUrl !== undefined ? body.imageUrl : product.imageUrl,
-      description:
-        body.description !== undefined ? body.description : product.description,
-      descriptionType: body.descriptionType !== undefined ? body.descriptionType : product.descriptionType,
-      descriptionImageUrl: body.descriptionImageUrl !== undefined ? body.descriptionImageUrl : product.descriptionImageUrl
+
+    // Update product
     const updatedProduct = {
       ...product,
       name: body.name || product.name,
@@ -260,8 +268,17 @@ imageUrl: body.imageUrl !== undefined ? body.imageUrl : product.imageUrl,
       category: body.category || product.category,
       unit: body.unit || product.unit,
       image: body.image || product.image,
+      imageUrl: body.imageUrl !== undefined ? body.imageUrl : product.imageUrl,
       description:
         body.description !== undefined ? body.description : product.description,
+      descriptionType:
+        body.descriptionType !== undefined
+          ? body.descriptionType
+          : product.descriptionType,
+      descriptionImageUrl:
+        body.descriptionImageUrl !== undefined
+          ? body.descriptionImageUrl
+          : product.descriptionImageUrl,
       barcode: body.barcode !== undefined ? body.barcode : product.barcode,
       stock: body.stock !== undefined ? body.stock : product.stock,
       active: body.active !== undefined ? body.active : product.active,
@@ -269,10 +286,7 @@ imageUrl: body.imageUrl !== undefined ? body.imageUrl : product.imageUrl,
       GSI1PK: `CATEGORY#${body.category || product.category}`,
       GSI1SK: `PRODUCT#${body.name || product.name}`,
     };
-imageUrl: updatedProduct.imageUrl,
-        description: updatedProduct.description,
-        descriptionType: updatedProduct.descriptionType,
-        descriptionImageUrl: updatedProduct.descriptionImageUrl
+
     await dbPut(updatedProduct);
 
     return successResponse({
@@ -284,7 +298,10 @@ imageUrl: updatedProduct.imageUrl,
         category: updatedProduct.category,
         unit: updatedProduct.unit,
         image: updatedProduct.image,
+        imageUrl: updatedProduct.imageUrl,
         description: updatedProduct.description,
+        descriptionType: updatedProduct.descriptionType,
+        descriptionImageUrl: updatedProduct.descriptionImageUrl,
         barcode: updatedProduct.barcode,
         stock: updatedProduct.stock,
         active: updatedProduct.active,
@@ -347,7 +364,8 @@ export const uploadImage = async (
       return errorResponse("Forbidden: Admin access required", 403);
     }
 
-    const contentType = event.headers["content-type"] || event.headers["Content-Type"] || "";
+    const contentType =
+      event.headers["content-type"] || event.headers["Content-Type"] || "";
 
     if (!contentType.includes("multipart/form-data")) {
       return errorResponse("Content-Type must be multipart/form-data", 400);
