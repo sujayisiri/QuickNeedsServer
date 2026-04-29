@@ -20,8 +20,11 @@ export interface Product {
   price: number;
   category: string;
   unit: string;
-  image: string;
-  description?: string;
+  image: string; // Emoji fallback
+  imageUrl?: string; // Product icon/thumbnail image URL (from S3)
+  description?: string; // Text description
+  descriptionType?: 'text' | 'image'; // Type of description
+  descriptionImageUrl?: string; // Image description URL (from S3)
   barcode?: string;
   stock: number;
   active: boolean;

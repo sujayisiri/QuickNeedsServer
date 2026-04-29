@@ -15,6 +15,8 @@ provider:
     JWT_SECRET: ${env:JWT_SECRET, 'your-secret-key-change-in-production'}
     SNS_REGION: ${self:provider.region}
     FIREBASE_SERVICE_ACCOUNT_KEY: ${env:FIREBASE_SERVICE_ACCOUNT_KEY, ''}
+    S3_BUCKET_NAME: ${self:custom.bucketName}
+    AWS_REGION: ${self:provider.region}
   iam:
     role:
       statements:
@@ -35,6 +37,14 @@ provider:
           Action:
             - sns:Publish
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+  bucketName: quickneeds-products-${self:provider.stage}
+            - s3:PutObjectAcl
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::${self:custom.bucketName}/*
 
 custom:
   tableName: quickneeds-${self:provider.stage}
@@ -135,7 +145,18 @@ functions:
           authorizer:
             name: authorizerFunc
             resultTtlInSeconds: 300
+uploadProductImage:
+    handler: src/handlers/products.uploadImage
+    events:
+      - http:
+          path: /products/upload-image
+          method: post
+          cors: true
+          authorizer:
+            name: authorizerFunc
+            resultTtlInSeconds: 300
 
+  
   # Order Functions
   createOrder:
     handler: src/handlers/orders.createOrder
@@ -259,3 +280,43 @@ resources:
             Value: ${self:provider.stage}
           - Key: Service
             Value: quickneeds
+
+    ProductsImagesBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3000
+        Tags:
+          - Key: Environment
+            Value: ${self:provider.stage}
+          - Key: Service
+            Value: quickneeds
+
+    ProductsImagesBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref ProductsImagesBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${self:custom.bucketName}/*"
