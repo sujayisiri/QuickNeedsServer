@@ -157,6 +157,17 @@ functions:
             name: authorizerFunc
             resultTtlInSeconds: 300
 
+  getUploadUrl:
+    handler: src/handlers/products.getUploadUrl
+    events:
+      - http:
+          path: /products/get-upload-url
+          method: post
+          cors: true
+          authorizer:
+            name: authorizerFunc
+            resultTtlInSeconds: 300
+
   # Order Functions
   createOrder:
     handler: src/handlers/orders.createOrder

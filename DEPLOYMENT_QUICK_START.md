@@ -1,6 +1,7 @@
 # Quick Deployment Guide - Product Images Feature
 
 ## Prerequisites
+
 - AWS Account configured
 - AWS CLI installed and configured
 - Node.js 20.x installed
@@ -18,6 +19,7 @@ This will install the new `@aws-sdk/client-s3` package along with existing depen
 ## Step 2: Environment Configuration
 
 The S3 bucket name is automatically configured in `serverless.yml`:
+
 - Dev: `quickneeds-products-dev`
 - Prod: `quickneeds-products-prod`
 
@@ -26,16 +28,19 @@ No manual configuration needed!
 ## Step 3: Deploy
 
 ### Deploy to Development
+
 ```bash
 npm run deploy:dev
 ```
 
 ### Deploy to Production
+
 ```bash
 npm run deploy:prod
 ```
 
 The deployment will automatically:
+
 1. ✅ Create S3 bucket with public read access
 2. ✅ Set up CORS configuration
 3. ✅ Configure bucket policy
@@ -46,6 +51,7 @@ The deployment will automatically:
 ## Step 4: Verify
 
 After deployment, you'll see:
+
 ```
 endpoints:
   POST - https://xxxxx.execute-api.region.amazonaws.com/dev/products/upload-image
@@ -57,14 +63,17 @@ endpoints:
 ## Step 5: Update Frontend
 
 Update the API base URL in your frontend if needed:
+
 ```typescript
 // src/config/api.ts
-export const API_BASE_URL = "https://xxxxx.execute-api.region.amazonaws.com/dev";
+export const API_BASE_URL =
+  "https://xxxxx.execute-api.region.amazonaws.com/dev";
 ```
 
 ## Step 6: Test
 
 ### Test Image Upload
+
 ```bash
 # Get admin token first
 TOKEN="your-admin-jwt-token"
@@ -78,6 +87,7 @@ curl -X POST \
 ```
 
 Expected response:
+
 ```json
 {
   "success": true,
@@ -89,6 +99,7 @@ Expected response:
 ```
 
 ### Test Product Creation
+
 ```bash
 curl -X POST \
   https://xxxxx.execute-api.region.amazonaws.com/dev/products \
@@ -109,20 +120,26 @@ curl -X POST \
 ## Troubleshooting
 
 ### Issue: Deployment fails with "Bucket already exists"
+
 **Solution:** The bucket name must be globally unique. Update `bucketName` in `serverless.yml`:
+
 ```yaml
 custom:
   bucketName: quickneeds-products-${self:provider.stage}-YOUR-UNIQUE-ID
 ```
 
 ### Issue: Images not accessible
+
 **Solution:** Check bucket policy:
+
 ```bash
 aws s3api get-bucket-policy --bucket quickneeds-products-dev
 ```
 
 ### Issue: CORS errors in frontend
+
 **Solution:** Bucket CORS is automatically configured. If issues persist, manually add:
+
 ```bash
 aws s3api put-bucket-cors --bucket quickneeds-products-dev --cors-configuration '{
   "CORSRules": [{
@@ -137,6 +154,7 @@ aws s3api put-bucket-cors --bucket quickneeds-products-dev --cors-configuration 
 ## Cost Estimate
 
 For moderate usage (1000 products, 10,000 views/month):
+
 - S3 Storage: ~$0.02/month
 - S3 Requests: ~$0.01/month
 - Data Transfer: ~$0.90/month
@@ -146,16 +164,20 @@ For moderate usage (1000 products, 10,000 views/month):
 ## What's New
 
 ### New Endpoint
+
 - `POST /products/upload-image` - Upload product images
 
 ### Updated Endpoints
+
 - `POST /products` - Now accepts imageUrl, descriptionType, descriptionImageUrl
 - `PUT /products/{id}` - Can update image fields
 - `GET /products` - Returns image fields
 - `GET /products/{id}` - Returns image fields
 
 ### New Database Fields
+
 Products now support:
+
 - `imageUrl` - Product icon URL
 - `descriptionType` - 'text' or 'image'
 - `descriptionImageUrl` - Description image URL
@@ -163,6 +185,7 @@ Products now support:
 ## Support
 
 For issues:
+
 1. Check CloudWatch logs
 2. Verify IAM permissions
 3. Test S3 bucket access
