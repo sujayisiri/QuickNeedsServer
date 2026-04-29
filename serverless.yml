@@ -40,7 +40,6 @@ provider:
         - Effect: Allow
           Action:
             - s3:PutObject
-  bucketName: quickneeds-products-${self:provider.stage}
             - s3:PutObjectAcl
             - s3:GetObject
           Resource:
@@ -48,6 +47,7 @@ provider:
 
 custom:
   tableName: quickneeds-${self:provider.stage}
+  bucketName: quickneeds-products-${self:provider.stage}
   serverless-offline:
     httpPort: 3000
 
@@ -145,7 +145,8 @@ functions:
           authorizer:
             name: authorizerFunc
             resultTtlInSeconds: 300
-uploadProductImage:
+
+  uploadProductImage:
     handler: src/handlers/products.uploadImage
     events:
       - http:
@@ -156,7 +157,6 @@ uploadProductImage:
             name: authorizerFunc
             resultTtlInSeconds: 300
 
-  
   # Order Functions
   createOrder:
     handler: src/handlers/orders.createOrder
