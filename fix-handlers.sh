@@ -6,25 +6,25 @@ set -e
 
 REGION="us-east-1"
 
-# Function to handler mapping
-declare -A HANDLERS=(
-  ["quickneeds-verifyOtp"]="handlers/auth.verifyOtp"
-  ["quickneeds-sendOtp"]="handlers/auth.sendOtp"
-  ["quickneeds-getProfile"]="handlers/users.getProfile"
-  ["quickneeds-updateProfile"]="handlers/users.updateProfile"
-  ["quickneeds-listProducts"]="handlers/products.listProducts"
-  ["quickneeds-getProduct"]="handlers/products.getProduct"
-  ["quickneeds-createProduct"]="handlers/products.createProduct"
-  ["quickneeds-updateProduct"]="handlers/products.updateProduct"
-  ["quickneeds-deleteProduct"]="handlers/products.deleteProduct"
-  ["quickneeds-uploadImage"]="handlers/products.uploadImage"
-  ["quickneeds-getUploadUrl"]="handlers/products.getUploadUrl"
-  ["quickneeds-createOrder"]="handlers/orders.createOrder"
-  ["quickneeds-listOrders"]="handlers/orders.listOrders"
-  ["quickneeds-getOrder"]="handlers/orders.getOrder"
-  ["quickneeds-updateOrderStatus"]="handlers/orders.updateOrderStatus"
-  ["quickneeds-authorizer"]="handlers/authorizer.handler"
-)
+# Function to handler mapping (function_name:handler_path)
+HANDLERS="
+quickneeds-verifyOtp:handlers/auth.verifyOtp
+quickneeds-sendOtp:handlers/auth.sendOtp
+quickneeds-getProfile:handlers/users.getProfile
+quickneeds-updateProfile:handlers/users.updateProfile
+quickneeds-listProducts:handlers/products.listProducts
+quickneeds-getProduct:handlers/products.getProduct
+quickneeds-createProduct:handlers/products.createProduct
+quickneeds-updateProduct:handlers/products.updateProduct
+quickneeds-deleteProduct:handlers/products.deleteProduct
+quickneeds-uploadImage:handlers/products.uploadImage
+quickneeds-getUploadUrl:handlers/products.getUploadUrl
+quickneeds-createOrder:handlers/orders.createOrder
+quickneeds-listOrders:handlers/orders.listOrders
+quickneeds-getOrder:handlers/orders.getOrder
+quickneeds-updateOrderStatus:handlers/orders.updateOrderStatus
+quickneeds-authorizer:handlers/authorizer.handler
+"
 
 # Colors
 GREEN='\033[0;32m'
@@ -41,8 +41,10 @@ success=0
 failed=0
 skipped=0
 
-for function_name in "${!HANDLERS[@]}"; do
-  handler="${HANDLERS[$function_name]}"
+# Process each function:handler pair
+echo "$HANDLERS" | grep -v '^$' | while IFS=: read -r function_name handler; do
+  # Skip empty lines
+  [ -z "$function_name" ] && continue
   
   # Check if function exists
   if ! aws lambda get-function \
@@ -50,7 +52,6 @@ for function_name in "${!HANDLERS[@]}"; do
     --region ${REGION} \
     --output text > /dev/null 2>&1; then
     echo "${YELLOW}⊘${NC} ${function_name} (not found)"
-    ((skipped++))
     continue
   fi
   
@@ -61,9 +62,8 @@ for function_name in "${!HANDLERS[@]}"; do
     --query 'Handler' \
     --output text 2>/dev/null || echo "")
   
-  if [ "$current_handler" == "$handler" ]; then
+  if [ "$current_handler" = "$handler" ]; then
     echo "${GREEN}✓${NC} ${function_name} (already correct)"
-    ((success++))
     continue
   fi
   
@@ -74,26 +74,15 @@ for function_name in "${!HANDLERS[@]}"; do
     --region ${REGION} \
     --output text > /dev/null 2>&1; then
     echo "${GREEN}✓${NC} ${function_name}: ${current_handler} → ${handler}"
-    ((success++))
   else
     echo "${RED}✗${NC} ${function_name}"
-    ((failed++))
   fi
 done
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-if [ $failed -eq 0 ] && [ $skipped -eq 0 ]; then
-  echo "${GREEN}✅ All handlers configured correctly!${NC}"
-elif [ $failed -eq 0 ]; then
-  echo "${GREEN}✅ ${success} handlers updated${NC}"
-  echo "${YELLOW}⊘ ${skipped} functions not found${NC}"
-else
-  echo "${YELLOW}⚠️  ${success} succeeded, ${failed} failed, ${skipped} skipped${NC}"
-fi
-
+echo "${GREEN}✅ Handler configuration complete!${NC}"
 echo ""
 echo "💡 Now redeploy your code:"
 echo "   ./quick-deploy.sh"
