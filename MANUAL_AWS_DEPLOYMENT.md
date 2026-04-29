@@ -79,6 +79,11 @@ This guide walks you through manually creating all AWS resources and deploying t
         "logs:PutLogEvents"
       ],
       "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::quickneeds-products-dev/*"
     }
   ]
 }
@@ -99,58 +104,149 @@ npm run build
 
 ---
 
-## Step 4: Create Lambda Layer for Dependencies
+## Step 4: Create Lambda Layers for Dependencies (Split into 2 layers)
 
-Lambda Layers separate node_modules from your code, providing several benefits:
+Lambda has a 250MB unzipped size limit per layer. Since our dependencies are large (especially firebase-admin), we'll split them into **2 layers**:
 
-- **Smaller deployments**: Code package ~1MB vs 64MB
-- **Faster uploads**: Only update code when handlers change
-- **Share dependencies**: One layer used by all 13 functions
-- **No size limits**: Direct console upload works
+### Layer 1: Core Dependencies (AWS SDK + Essential packages)
 
 ```bash
 cd /Users/sujays/Desktop/Personal/QuickNeedsServer
+mkdir -p deployment-packages
 
-# Create layer structure
-mkdir -p layers/nodejs
-cp package.json package-lock.json layers/nodejs/
-cd layers/nodejs
-npm install --production
+# Create core layer structure
+mkdir -p layers/core/nodejs
+cd layers/core/nodejs
+
+# Create package.json with core dependencies only
+cat > package.json << 'EOF'
+{
+  "name": "quickneeds-core-dependencies",
+  "version": "1.0.0",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.540.0",
+    "@aws-sdk/lib-dynamodb": "^3.540.0",
+    "@aws-sdk/client-s3": "^3.540.0",
+    "@aws-sdk/client-sns": "^3.540.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "bcryptjs": "^2.4.3"
+  }
+}
+EOF
+
+# Install production dependencies only
+npm install --production --no-optional
+
+# Remove unnecessary files
+rm -rf node_modules/**/*.md
+rm -rf node_modules/**/test
+rm -rf node_modules/**/tests
+rm -rf node_modules/**/.github
 
 # Package the layer
 cd ..
-zip -r ../deployment-packages/dependencies-layer.zip nodejs/
-
-# Go back to project root
+zip -r -q ../../deployment-packages/core-layer.zip nodejs/
 cd ../..
+
+# Check size
+echo "Core layer size:"
+ls -lh deployment-packages/core-layer.zip
 ```
 
-### Upload Layer to AWS:
-
-**Via AWS Console:**
-
-1. Go to **Lambda** → **Layers** → **Create layer**
-2. Configure:
-   - **Name**: `quickneeds-dependencies`
-   - **Upload**: `deployment-packages/dependencies-layer.zip` (or upload to S3 first if > 50MB)
-   - **Compatible runtimes**: Node.js 20.x
-3. Click **Create**
-4. **Note the Layer ARN** (e.g., `arn:aws:lambda:us-east-1:123456789:layer:quickneeds-dependencies:1`)
-
-**Via AWS CLI (if layer > 50MB):**
+### Layer 2: Firebase Dependencies
 
 ```bash
-# Upload to S3
-aws s3 mb s3://quickneeds-lambda-deployments --region us-east-1
-aws s3 cp deployment-packages/dependencies-layer.zip s3://quickneeds-lambda-deployments/
+# Create firebase layer structure
+mkdir -p layers/firebase/nodejs
+cd layers/firebase/nodejs
 
-# Create layer from S3
+# Create package.json with firebase only
+cat > package.json << 'EOF'
+{
+  "name": "quickneeds-firebase-dependencies",
+  "version": "1.0.0",
+  "dependencies": {
+    "firebase-admin": "^13.8.0"
+  }
+}
+EOF
+
+# Install production dependencies only
+npm install --production --no-optional
+
+# Remove unnecessary files to reduce size
+rm -rf node_modules/**/*.md
+rm -rf node_modules/**/test
+rm -rf node_modules/**/tests
+rm -rf node_modules/**/.github
+rm -rf node_modules/**/docs
+rm -rf node_modules/**/examples
+
+# Package the layer
+cd ..
+zip -r -q ../../deployment-packages/firebase-layer.zip nodejs/
+cd ../..
+
+# Check size
+echo "Firebase layer size:"
+ls -lh deployment-packages/firebase-layer.zip
+```
+
+### Upload Both Layers to S3
+
+```bash
+# Create S3 bucket (if not already created)
+aws s3 mb s3://quickneeds-lambda-deployments --region us-east-1
+
+# Upload both layers
+aws s3 cp deployment-packages/core-layer.zip s3://quickneeds-lambda-deployments/
+aws s3 cp deployment-packages/firebase-layer.zip s3://quickneeds-lambda-deployments/
+```
+
+### Create Both Lambda Layers
+
+```bash
+# Create Core Layer
 aws lambda publish-layer-version \
-  --layer-name quickneeds-dependencies \
-  --content S3Bucket=quickneeds-lambda-deployments,S3Key=dependencies-layer.zip \
+  --layer-name quickneeds-core-dependencies \
+  --description "Core dependencies: AWS SDK, JWT, UUID, bcrypt" \
+  --content S3Bucket=quickneeds-lambda-deployments,S3Key=core-layer.zip \
   --compatible-runtimes nodejs20.x \
   --region us-east-1
+
+# Note the ARN output (e.g., arn:aws:lambda:us-east-1:123456789:layer:quickneeds-core-dependencies:1)
+
+# Create Firebase Layer
+aws lambda publish-layer-version \
+  --layer-name quickneeds-firebase-dependencies \
+  --description "Firebase Admin SDK for push notifications" \
+  --content S3Bucket=quickneeds-lambda-deployments,S3Key=firebase-layer.zip \
+  --compatible-runtimes nodejs20.x \
+  --region us-east-1
+
+# Note the ARN output (e.g., arn:aws:lambda:us-east-1:123456789:layer:quickneeds-firebase-dependencies:1)
 ```
+
+**Save both ARNs - you'll need them when creating Lambda functions!**
+
+### Via AWS Console (Alternative):
+
+If you prefer using the console:
+
+1. **Create Core Layer:**
+   - Go to **Lambda** → **Layers** → **Create layer**
+   - Name: `quickneeds-core-dependencies`
+   - Upload from S3: `s3://quickneeds-lambda-deployments/core-layer.zip`
+   - Compatible runtimes: Node.js 20.x
+   - Click **Create**
+
+2. **Create Firebase Layer:**
+   - Go to **Lambda** → **Layers** → **Create layer**
+   - Name: `quickneeds-firebase-dependencies`
+   - Upload from S3: `s3://quickneeds-lambda-deployments/firebase-layer.zip`
+   - Compatible runtimes: Node.js 20.x
+   - Click **Create**
 
 ---
 
@@ -186,12 +282,16 @@ You need to create **13 Lambda functions**. For each function:
    - **Code source** → **Upload from** → **.zip file**
    - Upload `deployment-packages/functions.zip`
 
-6. **Add the Layer:**
+6. **Add BOTH Layers:**
    - Scroll down to **Layers** section
    - Click **Add a layer**
    - Select **Custom layers**
-   - Choose `quickneeds-dependencies` and version 1
+   - Choose `quickneeds-core-dependencies` and version 1
    - Click **Add**
+   - Click **Add a layer** again
+   - Choose `quickneeds-firebase-dependencies` and version 1
+   - Click **Add**
+   - (You should now see 2 layers attached)
 
 7. Configure:
    - **Handler**: (see list below)
@@ -199,6 +299,8 @@ You need to create **13 Lambda functions**. For each function:
    - **Timeout**: 30 seconds
 8. Add **Environment variables**:
    ```
+   S3_BUCKET_NAME=quickneeds-products-dev
+   AWS_REGION=us-east-1
    DYNAMODB_TABLE=quickneeds-dev
    JWT_SECRET=your-secure-random-secret-key-here
    SNS_REGION=us-east-1
@@ -207,22 +309,25 @@ You need to create **13 Lambda functions**. For each function:
 
 ### Lambda Functions to Create:
 
-| Function Name                  | Handler                                  |
-| ------------------------------ | ---------------------------------------- |
-| `quickneeds-sendOtp`           | `dist/handlers/auth.sendOtp`             |
-| `quickneeds-verifyOtp`         | `dist/handlers/auth.verifyOtp`           |
-| `quickneeds-getProfile`        | `dist/handlers/users.getProfile`         |
-| `quickneeds-updateProfile`     | `dist/handlers/users.updateProfile`      |
-| `quickneeds-listProducts`      | `dist/handlers/products.listProducts`    |
-| `quickneeds-getProduct`        | `dist/handlers/products.getProduct`      |
-| `quickneeds-createProduct`     | `dist/handlers/products.createProduct`   |
-| `quickneeds-updateProduct`     | `dist/handlers/products.updateProduct`   |
-| `quickneeds-deleteProduct`     | `dist/handlers/products.deleteProduct`   |
-| `quickneeds-createOrder`       | `dist/handlers/orders.createOrder`       |
-| `quickneeds-listOrders`        | `dist/handlers/orders.listOrders`        |
-| `quickneeds-getOrder`          | `dist/handlers/orders.getOrder`          |
+| Function Name                   | Handler                                |
+| ------------------------------- | -------------------------------------- |
+| `quickneeds-sendOtp`            | `dist/handlers/auth.sendOtp`           |
+| `quickneeds-verifyOtp`          | `dist/handlers/auth.verifyOtp`         |
+| `quickneeds-getProfile`         | `dist/handlers/users.getProfile`       |
+| `quickneeds-updateProfile`      | `dist/handlers/users.updateProfile`    |
+| `quickneeds-listProducts`       | `dist/handlers/products.listProducts`  |
+| `quickneeds-getProduct`         | `dist/handlers/products.getProduct`    |
+| `quickneeds-createProduct`      | `dist/handlers/products.createProduct` |
+| `quickneeds-updateProduct`      | `dist/handlers/products.updateProduct` |
+| `quickneeds-deleteProduct`      | `dist/handlers/products.deleteProduct` |
+| `quickneeds-createOrder`        | `dist/handlers/orders.createOrder`     |
+| `quickneeds-listOrders`         | `dist/handlers/orders.listOrders`      |
+| `quickneeds-uploadProductImage` | `dist/handlers/products.uploadImage`   |
+| `quickneeds-authorizer`         | `dist/handlers/authorizer.handler`     |
+
+**Note:** All functions need BOTH layers attached (core + firebase).
 | `quickneeds-updateOrderStatus` | `dist/handlers/orders.updateOrderStatus` |
-| `quickneeds-authorizer`        | `dist/handlers/authorizer.handler`       |
+| `quickneeds-authorizer` | `dist/handlers/authorizer.handler` |
 
 ---
 
@@ -263,8 +368,10 @@ You need to create **13 Lambda functions**. For each function:
 2. Create resource `/users/profile`
 3. Create method `GET /users/profile` → integrate with `quickneeds-getProfile`
 4. Create method `PUT /users/profile` → integrate with `quickneeds-updateProfile`
-5. For both methods, enable **Authorization** → select `jwt-authorizer`
-6. Enable CORS
+5. Create resource `/products/upload-image`
+6. Create method `POST /products/upload-image` → integrate with `quickneeds-uploadProductImage` (with auth)
+7. For both methods, enable **Authorization** → select `jwt-authorizer`
+8. Enable CORS
 
 #### Product endpoints:
 
@@ -352,31 +459,20 @@ npm run seed:products
 
 ### Update Function Code (when you change handlers):
 
+````bash
+# Rebuilds (when package.json changes):
+
 ```bash
-# Rebuild
-npm run build
+# Rebuild and republish layers following the same process as Step 4
+# Then update all functions with new layer versions:
 
-# Repackage only code
-zip -r deployment-packages/functions.zip dist/
+CORE_LAYER_ARN="arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:layer:quickneeds-core-dependencies:2"
+FIREBASE_LAYER_ARN="arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:layer:quickneeds-firebase-dependencies:2"
 
-# Update all Lambda functions via AWS CLI:
-for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct createProduct updateProduct deleteProduct createOrder listOrders getOrder updateOrderStatus authorizer; do
-  aws lambda update-function-code \
+for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct createProduct updateProduct deleteProduct uploadProductImage createOrder listOrders getOrder updateOrderStatus authorizer; do
+  aws lambda update-function-configuration \
     --function-name quickneeds-$func \
-    --zip-file fileb://deployment-packages/functions.zip
-done
-```
-
-### Update Dependencies Layer (when package.json changes):
-
-```bash
-# Rebuild layer
-cd layers/nodejs
-npm install --production
-cd ..
-zip -r ../deployment-packages/dependencies-layer.zip nodejs/
-cd ..
-
+    --layers $CORE_LAYER_ARN $FIREBASE_
 # Publish new layer version
 aws lambda publish-layer-version \
   --layer-name quickneeds-dependencies \
@@ -392,7 +488,7 @@ for func in sendOtp verifyOtp getProfile updateProfile listProducts getProduct c
     --function-name quickneeds-$func \
     --layers $LAYER_ARN
 done
-```
+````
 
 ---
 
