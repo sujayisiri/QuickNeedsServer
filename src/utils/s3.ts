@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { v4 as uuidv4 } from "uuid";
 
 const s3Client = new S3Client({
@@ -28,7 +29,7 @@ export const uploadImageToS3 = async (
     Key: filename,
     Body: buffer,
     ContentType: contentType,
-    ACL: "public-read", // Make the image publicly accessible
+    // Removed ACL - will use bucket policy for public access instead
   });
 
   await s3Client.send(command);
@@ -38,13 +39,51 @@ export const uploadImageToS3 = async (
 };
 
 /**
+ * Generate a presigned URL for direct S3 upload from frontend
+ * This bypasses API Gateway's 10MB limit
+ * @param fileName - Original filename
+ * @param contentType - MIME type
+ * @param type - Type of image (icon or description)
+ * @returns Object with uploadUrl and final imageUrl
+ */
+export const generatePresignedUploadUrl = async (
+  fileName: string,
+  contentType: string,
+  type: "icon" | "description",
+): Promise<{ uploadUrl: string; imageUrl: string }> => {
+  // Generate unique filename
+  const extension =
+    contentType.split("/")[1] || fileName.split(".").pop() || "jpg";
+  const filename = `products/${type}-${uuidv4()}.${extension}`;
+
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: filename,
+    ContentType: contentType,
+    // Removed ACL - will use bucket policy for public access instead
+  });
+
+  // Generate presigned URL (valid for 5 minutes)
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+  // Generate the final public URL
+  const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || "us-east-1"}.amazonaws.com/${filename}`;
+
+  return { uploadUrl, imageUrl };
+};
+
+/**
  * Parse multipart/form-data from API Gateway
  * This is a simplified parser for handling single file uploads
  */
 export const parseMultipartFormData = (
   body: string,
   contentType: string,
-): { file: Buffer; fileType: string; fields: Record<string, string> } | null => {
+): {
+  file: Buffer;
+  fileType: string;
+  fields: Record<string, string>;
+} | null => {
   try {
     // Extract boundary from content-type header
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
