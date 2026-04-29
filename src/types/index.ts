@@ -23,7 +23,7 @@ export interface Product {
   image: string; // Emoji fallback
   imageUrl?: string; // Product icon/thumbnail image URL (from S3)
   description?: string; // Text description
-  descriptionType?: 'text' | 'image'; // Type of description
+  descriptionType?: "text" | "image"; // Type of description
   descriptionImageUrl?: string; // Image description URL (from S3)
   barcode?: string;
   stock: number;

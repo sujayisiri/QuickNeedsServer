@@ -1,7 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { dbGet, dbPut, dbDelete, dbQuery, dbScan } from "../utils/dynamodb";
 import { successResponse, errorResponse, parseBody } from "../utils/response";
-import { uploadImageToS3, parseMultipartFormData } from "../utils/s3";
+import {
+  uploadImageToS3,
+  parseMultipartFormData,
+  generatePresignedUploadUrl,
+} from "../utils/s3";
 import { Product } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -353,7 +357,59 @@ export const deleteProduct = async (
   }
 };
 
-// Upload product image to S3 (Admin only)
+// Generate presigned URL for direct S3 upload (Admin only)
+// This avoids API Gateway's 10MB payload limit
+export const getUploadUrl = async (
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> => {
+  try {
+    const role = event.requestContext.authorizer?.role;
+
+    if (role !== "admin") {
+      return errorResponse("Forbidden: Admin access required", 403);
+    }
+
+    const body = parseBody<{
+      fileName: string;
+      fileType: string;
+      type: "icon" | "description";
+    }>(event.body);
+
+    if (!body) {
+      return errorResponse("Invalid request body", 400);
+    }
+
+    const { fileName, fileType, type } = body;
+
+    // Validate type
+    if (type !== "icon" && type !== "description") {
+      return errorResponse("Type must be 'icon' or 'description'", 400);
+    }
+
+    // Validate file type
+    if (!fileType.startsWith("image/")) {
+      return errorResponse("File type must be an image", 400);
+    }
+
+    // Generate presigned URL for direct upload
+    const { uploadUrl, imageUrl } = await generatePresignedUploadUrl(
+      fileName,
+      fileType,
+      type,
+    );
+
+    return successResponse({
+      uploadUrl,
+      imageUrl,
+      message: "Presigned URL generated successfully",
+    });
+  } catch (error) {
+    console.error("Get Upload URL Error:", error);
+    return errorResponse("Failed to generate upload URL", 500, error);
+  }
+};
+
+// Legacy upload endpoint (kept for backward compatibility, but has 10MB API Gateway limit)
 export const uploadImage = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
